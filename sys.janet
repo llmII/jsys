@@ -1,4 +1,4 @@
-(import csys)
+(import csys :as sys)
 
 # helpers ********************************************************************
 # Definition from:
@@ -11,23 +11,29 @@
   [from to]
   (setdyn (symbol to) (dyn (symbol from))))
 
+(defn- redef-clone
+  "Redef a value, keeping all metadata."
+  [from to]
+  (setdyn (symbol to) (table/clone (dyn (symbol from)))))
+
 (defn- redef-
   "Redef a value, then set it private in it's metadata."
   [from to]
-  (redef from to)
-  (set ((dyn (symbol from)) :private) true))
+  (redef-clone from to)
+  (set ((dyn (symbol to)) :private) true))
 
 (defn- redef+
   "Redef a value, then set it private in it's metadata."
   [from to]
-  (redef from to)
-  (set ((dyn (symbol from)) :private) false))
+  (redef-clone from to)
+  (set ((dyn (symbol to)) :private) false))
 
 (defmacro- redef-symbol
   "Redef, minus the string conversions/usage."
   [from to]
-  ~(redef+ ,(string from) ,to))
+  ~(redef+ ,(string from) ',to))
 
+# TODO: redef+ on first, redef on rest - don't clone so many tables!
 (defn- redef-multi*
   ``
   Helper for redef-multi, does redefs over an indexed collection. Makes each
@@ -56,8 +62,8 @@
 # Figuring out which OS and calling the correct function in every wrapper
 # would be super tedious, so create a local definition prefixed with '_'
 (let [os (match (os/which)
-           :windows windows
-           _        nix)]
+           :windows 'windows
+           _        'nix)]
   (each binding exports
     (redef- (string "sys/" os "/" binding) (string "_" binding))))
 
