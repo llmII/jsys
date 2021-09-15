@@ -43,6 +43,7 @@
   new symbol exported.
   ``
   [from to]
+  # TODO strip the match, it's not needed
   (match (length to)
     0   (redef+ from to)
     _   (each n to (redef+ (string from) n))))
@@ -59,7 +60,7 @@
        ~(redef-multi* ,(string from) ',collecting)))
 
 # All the system specific functions exported from C
-(def- exports '(chdir chown chroot dup2 fork setegid seteuid setgid setuid
+(def- exports '(chown chroot dup2 fileno fork setegid seteuid setgid setuid
                       setsid fcntl getpwnam getgrnam))
 
 # Figuring out which OS and calling the correct function in every wrapper
@@ -68,12 +69,9 @@
            :windows 'windows
            _        'nix)]
   (each binding exports
-    (redef- (string "sys/" os "/" binding) (string "_" binding))))
-
-#TODO: also export as publicly $os/$function-name
-
-# chdir - change directory ***************************************************
-(redef-multi _chdir chdir change-directory)
+    (do
+      (redef+ (string "sys/" os "/" binding) (string os "/" binding))
+      (redef- (string "sys/" os "/" binding) (string "_" binding)))))
 
 # chown - change fs entry ownership ******************************************
 # TODO: support chown with username/groupname instead of just uid/gid, support

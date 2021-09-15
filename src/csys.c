@@ -50,12 +50,13 @@
  * great in the sys/unified module */
 #ifndef JANET_WINDOWS
 #include <errno.h>     /* errno */
-#include <unistd.h>    /* chdir(2) chown(2) chroot(2) dup2(2) fork(2)
+#include <unistd.h>    /* chown(2) chroot(2) dup2(2) fork(2)
                         * setegid(2) seteuid(2) setgid(2)
                         * setuid(2) setsid(2)  */
 #include <fcntl.h>     /* F_GETLK F_SETLK - fcntl(2) open(2) */
 #include <pwd.h>       /* struct passwd - getpwnam_r(3) */
 #include <grp.h>       /* struct group - getgrnam(3) */
+#include <stdio.h>     /* fileno(3) */
 #endif
 
 /*============================================================================
@@ -111,8 +112,6 @@
 #define GETGRNAM_R_NETBSD GETGRGID_R_NETBSD
 #endif
 
-/* TODO: Trim down, we only care about *BSD, MacOS, Linux (glibc, musl), and
- * Windows! */
 #define UCLIBC_PREREQ(M, m, p)                              \
     (__UCLIBC__ &&                                          \
      (__UCLIBC_MAJOR__ > M ||                               \
@@ -155,7 +154,6 @@
  * Forward declarations                                                      *
  ===========================================================================*/
 /* *nix: unistd.h, *: ? */
-JANET_CFUN(cfun_chdir); /* TODO: remove, os/cd already exists! */
 JANET_CFUN(cfun_chown);
 JANET_CFUN(cfun_chroot);
 JANET_CFUN(cfun_dup2);
@@ -175,39 +173,15 @@ JANET_CFUN(cfun_getpwnam);
 /* *nix: grp.h, *: ? */
 JANET_CFUN(cfun_getgrnam);
 
-/* *nix: $this */
-/* JANET_CFUN(cfun_file_handle); */ /* See later TODO */
-/* int file_from_handle(Janet *argv, int idx, FILE **handle) */
+/* *nix: stdio.h */
+JANET_CFUN(cfun_file_handle); /* See later TODO */
+int file_to_fd(Janet *, int);
 
 /*============================================================================
  * Function definitions
  ===========================================================================*/
 #ifndef JANET_WINDOWS /* *nix */
 /* *nix: unistd.h, *: ? */
-JANET_FN(cfun_chdir, SYS_FUSAGE("chdir", " path-or-file"),
-         "-> _true|throws error_\n\n"
-         "\t`path-or-file` **:string|:core/file**\n\n"
-         "Changes the current working directory to `path-or-file`.") {
-    janet_fixarity(argc, 1);
-
-    if(janet_checktype(argv[0], JANET_ABSTRACT)) {
-        FILE *f = ((JanetFile *)
-                   janet_getabstract(argv, 0, &janet_file_type))->file;
-        if (0 != fchdir(fileno(f))) {
-            sys_errno("Failed to chdir with file handle");
-            return janet_wrap_boolean(0);
-        }
-    } else {
-        const char *where = (char *)janet_getstring(argv, 0);
-        if (0 != chdir(where)) {
-            sys_errnof("Failed to chdir with path: %s", where);
-            return janet_wrap_boolean(0);
-        }
-    }
-
-    return janet_wrap_boolean(1);
-}
-
 JANET_FN(cfun_chown, SYS_FUSAGE("chown", " uid gid path-or-file"),
          "-> _true|throws error_\n\n"
          "\t`uid`          **:number**\n\n"
@@ -222,16 +196,19 @@ JANET_FN(cfun_chown, SYS_FUSAGE("chown", " uid gid path-or-file"),
     gid_t gid = janet_getinteger(argv, 1);
 
     if(janet_checktype(argv[0], JANET_ABSTRACT)) {
-        FILE *f = ((JanetFile *)
-                   janet_getabstract(argv, 0, &janet_file_type))->file;
-        if (0 != fchown(fileno(f), uid, gid)) {
-            sys_errno("Failed to chdir with file handle");
-            return janet_wrap_boolean(0);
+        int fd;
+        if (-1 != (fd = file_to_fd(argv, 0))) {
+            if (0 != fchown(fd, uid, gid)) {
+                sys_errno("Failed to chown with file handle");
+                return janet_wrap_boolean(0);
+            }
+        } else {
+            janet_panic("Invalid file handle");
         }
     } else {
         const char *where = (char *)janet_getstring(argv, 0);
         if (0 != chown(where, uid, gid)) {
-            sys_errnof("Failed to chdir with path: %s", where);
+            sys_errnof("Failed to chown with path: %s", where);
             return janet_wrap_boolean(0);
         }
     }
@@ -412,9 +389,6 @@ JANET_FN(cfun_dup2, SYS_FUSAGE("dup2", "fd-to fd-from"),
     return janet_wrap_boolean(1);
 }
 
-/* TODO: need a Janet function to turn a stream into an integer File
- * Descriptor */
-
 JANET_FN(cfun_fork, SYS_FUSAGE0("fork"),
          "-> _:number pid|throws error_\n\n"
          "Creates a fork of this proccess.") {
@@ -531,18 +505,22 @@ JANET_FN(cfun_fcntl, SYS_FUSAGE("fcntl", " file flag"),
     janet_fixarity(argc, 2);
 
     if(janet_checktype(argv[0], JANET_ABSTRACT)) {
-        int fd = fileno(((JanetFile *)
-                         janet_getabstract(argv, 0, &janet_file_type))->file);
         int op = 0;
-        if (janet_keyeq(argv[1], "get-lock"))
-            op = F_GETLK;
-        else if (janet_keyeq(argv[1], "set-lock"))
-            op = F_SETLK;
-        else if (janet_keyeq(argv[1], "wait-lock"))
-            op = F_SETLKW;
-        else {
-            janet_panic("Slot #2 must be a keyword equal to :get-lock "
-                        "| :set-lock | :wait-lock");
+        int fd;
+        if(-1 != (fd = file_to_fd(argv, 0))) {
+            if (janet_keyeq(argv[1], "get-lock"))
+                op = F_GETLK;
+            else if (janet_keyeq(argv[1], "set-lock"))
+                op = F_SETLK;
+            else if (janet_keyeq(argv[1], "wait-lock"))
+                op = F_SETLKW;
+            else {
+                janet_panic("Slot #2 must be a keyword equal to :get-lock "
+                            "| :set-lock | :wait-lock");
+                return janet_wrap_boolean(0);
+            }
+        } else {
+            janet_panic("Invalid File Handle");
             return janet_wrap_boolean(0);
         }
 
@@ -861,9 +839,27 @@ JANET_FN(cfun_getgrnam, SYS_FUSAGE("getgrnam", " id-or-groupname"),
 
     return janet_wrap_struct(r);
 }
+
+/* nix: stdio.h, *: ?*/
+int file_to_fd(Janet *argv, int idx) {
+    if(janet_checkfile(argv[idx]))
+        return fileno(janet_unwrapfile(argv[idx], NULL));
+    return -1;
+}
+
+JANET_FN(cfun_fileno, SYS_FUSAGE("fileno", " file"),
+         "-> _:number|throws error\n\n"
+         "\t`file` **:core/file**\n\n"
+         "Returns the integer file descriptor from a :core/file.") {
+    int ret;
+    if (-1 != (ret = file_to_fd(argv , 0)))
+        return janet_wrap_integer(ret);
+
+    janet_panic("Invalid File Handle");
+    return janet_wrap_boolean(0);
+}
 #else /* Windows */
 /* *nix: unistd.h, *: ? */
-DEF_NOT_IMPL(cfun_chdir, "sys/windows/chdir");
 DEF_NOT_IMPL(cfun_chown, "sys/windows/chown");
 DEF_NOT_IMPL(cfun_chroot, "sys/windows/chroot");
 DEF_NOT_IMPL(cfun_dup2, "sys/windows/dup2");
@@ -882,6 +878,9 @@ DEF_NOT_IMPL(cfun_getpwnam, "sys/windows/getpwnam");
 
 /* *nix: grp.h, *: ? */
 DEF_NOT_IMPL(cfun_getgrnam, "sys/windows/getgrnam");
+
+/* *nix: stdio.h, *: ? */
+DEF_NOT_IMPL(cfun_fileno, "sys/windows/fileno");
 #endif
 
 /*============================================================================
@@ -892,25 +891,27 @@ DEF_NOT_IMPL(cfun_getgrnam, "sys/windows/getgrnam");
 JANET_MODULE_ENTRY(JanetTable *env) {
     janet_cfuns_ext(env, "sys", (JanetRegExt[]) {
         /* *nix: unistd.h, *: ? */
-        JANET_REG(SYS_IMPL "/chdir", cfun_chdir),
-                  JANET_REG(SYS_IMPL "/chown", cfun_chown),
-                  JANET_REG(SYS_IMPL "/chroot", cfun_chroot),
-                  JANET_REG(SYS_IMPL "/dup2", cfun_dup2),
-                  JANET_REG(SYS_IMPL "/fork", cfun_fork),
-                  JANET_REG(SYS_IMPL "/setegid", cfun_setegid),
-                  JANET_REG(SYS_IMPL "/seteuid", cfun_seteuid),
-                  JANET_REG(SYS_IMPL "/setgid", cfun_setgid),
-                  JANET_REG(SYS_IMPL "/setuid", cfun_setuid),
-                  JANET_REG(SYS_IMPL "/setsid", cfun_setsid),
+        JANET_REG(SYS_IMPL "/chown", cfun_chown),
+        JANET_REG(SYS_IMPL "/chroot", cfun_chroot),
+        JANET_REG(SYS_IMPL "/dup2", cfun_dup2),
+        JANET_REG(SYS_IMPL "/fork", cfun_fork),
+        JANET_REG(SYS_IMPL "/setegid", cfun_setegid),
+        JANET_REG(SYS_IMPL "/seteuid", cfun_seteuid),
+        JANET_REG(SYS_IMPL "/setgid", cfun_setgid),
+        JANET_REG(SYS_IMPL "/setuid", cfun_setuid),
+        JANET_REG(SYS_IMPL "/setsid", cfun_setsid),
 
-                  /* *nix: fcntl.h, *: ? */
-                  JANET_REG(SYS_IMPL "/fcntl", cfun_fcntl),
+        /* *nix: fcntl.h, *: ? */
+        JANET_REG(SYS_IMPL "/fcntl", cfun_fcntl),
 
-                  /* *nix: pwd.h, *: ? */
-                  JANET_REG(SYS_IMPL "/getpwnam", cfun_getpwnam),
+        /* *nix: pwd.h, *: ? */
+        JANET_REG(SYS_IMPL "/getpwnam", cfun_getpwnam),
 
-                  /* *nix: grp.h, *: ? */
-                  JANET_REG(SYS_IMPL "/getgrnam", cfun_getgrnam),
-                  JANET_REG_END
+        /* *nix: grp.h, *: ? */
+        JANET_REG(SYS_IMPL "/getgrnam", cfun_getgrnam),
+
+        /* *nix: stdio.h, *: ? */
+        JANET_REG(SYS_IMPL "/fileno", cfun_fileno),
+        JANET_REG_END
     });
 }
