@@ -174,7 +174,7 @@ JANET_CFUN(cfun_getpwnam);
 JANET_CFUN(cfun_getgrnam);
 
 /* *nix: stdio.h */
-JANET_CFUN(cfun_file_handle); /* See later TODO */
+JANET_CFUN(cfun_file_handle);
 int file_to_fd(Janet *, int);
 
 /*============================================================================

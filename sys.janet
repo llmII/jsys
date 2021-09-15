@@ -1,8 +1,5 @@
 (import csys :as sys)
 
-# TODO: re-export os/cwd os/cd as sys/current-working-directory and
-# sys/change-directory?
-
 # helpers ********************************************************************
 # Definition from:
 #   https://github.com/janet-lang/spork/blob/master/spork/path.janet
@@ -36,17 +33,17 @@
   [from to]
   ~(redef+ ,(string from) ',to))
 
-# TODO: redef+ on first, redef on rest - don't clone so many tables!
 (defn- redef-multi*
   ``
   Helper for redef-multi, does redefs over an indexed collection. Makes each
   new symbol exported.
   ``
   [from to]
-  # TODO strip the match, it's not needed
-  (match (length to)
-    0   (redef+ from to)
-    _   (each n to (redef+ (string from) n))))
+  (redef+ from (get to 0))
+  (var idx (- (length to) 1))
+  (while (> idx 0)
+    (redef+ (string (get to 0)) (get to idx))
+    (-- idx)))
 
 (defmacro- redef-multi
   "Redef each symbol after the first as the first."
