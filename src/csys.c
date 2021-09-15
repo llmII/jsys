@@ -87,7 +87,7 @@
 
 #define SYS_UNAME(name) "sys/" SYS_IMPL "/" name
 #define SYS_FUSAGE0(name) "(" SYS_UNAME(name) ")"
-#define SYS_FUSAGE(name, ...) "(" SYS_UNAME(name) __VA_ARG__ ")"
+#define SYS_FUSAGE(name, rest) "(" SYS_UNAME(name) rest ")"
 /* Definition for:
  *   GLIBC_PREREQ, HAVE_DUP3 __NetBSD_Prereq__, NETBSD_PREREQ, FREEBSD_PREREQ
  *   U_CLOEXEC, U_SYSFLAGS, U_FIXFLAGS, U_FDFLAGS, U_FLFLAGS,
@@ -155,7 +155,7 @@
  * Forward declarations                                                      *
  ===========================================================================*/
 /* *nix: unistd.h, *: ? */
-JANET_CFUN(cfun_chdir);
+JANET_CFUN(cfun_chdir); /* TODO: remove, os/cd already exists! */
 JANET_CFUN(cfun_chown);
 JANET_CFUN(cfun_chroot);
 JANET_CFUN(cfun_dup2);
@@ -175,13 +175,19 @@ JANET_CFUN(cfun_getpwnam);
 /* *nix: grp.h, *: ? */
 JANET_CFUN(cfun_getgrnam);
 
+/* *nix: $this */
+/* JANET_CFUN(cfun_file_handle); */ /* See later TODO */
+/* int file_from_handle(Janet *argv, int idx, FILE **handle) */
+
 /*============================================================================
  * Function definitions
  ===========================================================================*/
 #ifndef JANET_WINDOWS /* *nix */
 /* *nix: unistd.h, *: ? */
-JANET_FN(cfun_chdir, SYS_FUSAGE0("chdir"),
-         "DOCUMENT ME") {
+JANET_FN(cfun_chdir, SYS_FUSAGE("chdir", " path-or-file"),
+         "-> _true|throws error_\n\n"
+         "\t`path-or-file` **:string|:core/file**\n\n"
+         "Changes the current working directory to `path-or-fd`") {
     janet_fixarity(argc, 1);
 
     if(janet_checktype(argv[0], JANET_ABSTRACT)) {
@@ -202,8 +208,13 @@ JANET_FN(cfun_chdir, SYS_FUSAGE0("chdir"),
     return janet_wrap_boolean(1);
 }
 
-JANET_FN(cfun_chown, SYS_FUSAGE0("chown"),
-         "DOCUMENT ME") {
+JANET_FN(cfun_chown, SYS_FUSAGE("chown", " uid gid path-or-fd"),
+         "-> _true|throws error_\n\n"
+         "\t`uid`          **:number**\n\n"
+         "\t`gid`          **:number**\n\n"
+         "\t`path-or-file` **:string|:core/file**\n\n"
+         "Changes the ownership of the file at `path-or-fd` over to "
+) {
     janet_fixarity(argc, 3);
 
     uid_t uid = janet_getinteger(argv, 0);
@@ -227,8 +238,10 @@ JANET_FN(cfun_chown, SYS_FUSAGE0("chown"),
     return janet_wrap_boolean(1);
 }
 
-JANET_FN(cfun_chroot, SYS_FUSAGE0("chroot"),
-         "DOCUMENT ME") {
+JANET_FN(cfun_chroot, SYS_FUSAGE("chroot", " path"),
+         "-> _true|throws error_\n\n"
+         "\t`path` **:string**\n\n"
+         "Changes the root (what is considered '/') to `path`.") {
     janet_fixarity(argc, 1);
 
     const char *where = (char *) janet_getstring(argv, 0);
@@ -369,8 +382,19 @@ static int u_dup2(int fd, int fd2, int64_t flags) {
 
 /* Referred to:
  * https://github.com/wahern/lunix/blob/master/src/unix.c */
-JANET_FN(cfun_dup2, SYS_FUSAGE0("dup2"),
-         "DOCUMENT ME") {
+/* NOTE: only operate on int fds with this one, as it isn't inoften that this
+ * be called with the purpose being to redirect stdout, stdin, and stderr,
+ * well known descriptor numbers. `sys.janet` should provide a wrapper
+ * handling path names or translation of JanetStreams to int fds, along with
+ * handling pure int fds. */
+/* NOTE: Janet side code is responsible for resetting (dyn :out|:in|:err) in
+ * the event it redirects them! */
+JANET_FN(cfun_dup2, SYS_FUSAGE("dup2", "fd-to fd-from"),
+         "-> _true|throws error_\n\n"
+         "\t`fd-to`   **:number**\n\n"
+         "\t`fd-from` **:number** _optional_\n\n"
+         "Redirects the descriptor identified in `fd-from` to the file "
+         "identified in `fd-to`.") {
     janet_arity(argc, 2, 3);
 
     int32_t old = janet_getinteger(argv, 0);
@@ -387,8 +411,12 @@ JANET_FN(cfun_dup2, SYS_FUSAGE0("dup2"),
     return janet_wrap_boolean(1);
 }
 
+/* TODO: need a Janet function to turn a stream into an integer File
+ * Descriptor */
+
 JANET_FN(cfun_fork, SYS_FUSAGE0("fork"),
-         "DOCUMENT ME") {
+         "-> _:number pid|throws error_\n\n"
+         "Creates a fork of this proccess.") {
     janet_fixarity(argc, 0);
 
     pid_t pid;
@@ -401,8 +429,10 @@ JANET_FN(cfun_fork, SYS_FUSAGE0("fork"),
     return janet_wrap_integer(pid);
 }
 
-JANET_FN(cfun_setegid, SYS_FUSAGE0("setegid"),
-         "DOCUMENT ME") {
+JANET_FN(cfun_setegid, SYS_FUSAGE("setegid", " gid"),
+         "-> _true|throws error_\n\n"
+         "\t`gid` **:number**\n\n"
+         "Sets the effective operating group id of this process to `gid`.") {
     janet_fixarity(argc, 1);
 
     gid_t gid = janet_getinteger(argv, 0);
@@ -415,8 +445,10 @@ JANET_FN(cfun_setegid, SYS_FUSAGE0("setegid"),
     return janet_wrap_boolean(1);
 }
 
-JANET_FN(cfun_seteuid, SYS_FUSAGE0("seteuid"),
-         "DOCUMENT ME") {
+JANET_FN(cfun_seteuid, SYS_FUSAGE("seteuid", " uid"),
+         "-> _true|throws error_\n\n"
+         "\t`uid` **:number**\n\n"
+         "Sets the effective operating user id of this process to `uid`.") {
     janet_fixarity(argc, 1);
 
     uid_t uid = janet_getinteger(argv, 0);
@@ -429,8 +461,10 @@ JANET_FN(cfun_seteuid, SYS_FUSAGE0("seteuid"),
     return janet_wrap_boolean(1);
 }
 
-JANET_FN(cfun_setgid, SYS_FUSAGE0("setgid"),
-         "DOCUMENT ME") {
+JANET_FN(cfun_setgid, SYS_FUSAGE("setgid", " gid"),
+         "-> _true|throws error_\n\n"
+         "\t`gid` **:number**\n\n"
+         "Sets the operating group id of this process to `gid`.") {
     janet_fixarity(argc, 1);
 
     gid_t gid = janet_getinteger(argv, 0);
@@ -443,8 +477,10 @@ JANET_FN(cfun_setgid, SYS_FUSAGE0("setgid"),
     return janet_wrap_boolean(1);
 }
 
-JANET_FN(cfun_setuid, SYS_FUSAGE0("setuid"),
-         "DOCUMENT ME") {
+JANET_FN(cfun_setuid, SYS_FUSAGE("setuid", " uid"),
+         "-> _true|throws error_\n\n"
+         "\t`uid` **:number**\n\n"
+         "Sets the operating user id of this process to `uid`.") {
     janet_fixarity(argc, 1);
 
     uid_t uid = janet_getinteger(argv, 0);
@@ -458,7 +494,10 @@ JANET_FN(cfun_setuid, SYS_FUSAGE0("setuid"),
 }
 
 JANET_FN(cfun_setsid, SYS_FUSAGE0("setsid"),
-         "DOCUMENT ME") {
+         "-> _:number pid|throws error_\n\n"
+         "Create a new session with no controlling terminal, becoming "
+         "the session leader and process group leader of a new process "
+         "group. Should definitely double check your setsid(2) man page.") {
     janet_fixarity(argc, 0);
 
     pid_t pid;
@@ -477,8 +516,17 @@ JANET_FN(cfun_setsid, SYS_FUSAGE0("setsid"),
  * Using fcntl for lock files exclusively (no other methods), it supports
  * getting the pid of the process holding the lock, which the other
  * interfaces may not. */
-JANET_FN(cfun_fcntl, SYS_FUSAGE0("fcntl"),
-         "DOCUMENT ME") {
+JANET_FN(cfun_fcntl, SYS_FUSAGE("fcntl", " file flag"),
+         "-> _:number pid|true|throws error_\n\n"
+         "\t`file` **:core/file**\n\n"
+         "\t`flag` **:keyword** _:get-lock|:set-lock|:wait-lock_\n\n"
+         "Only supporting file locking operations at this time, fnctl allows "
+         "you to either lock, or wait to get lock, or figure out the process "
+         "id currently holding the lock of the `file` dependent upon the "
+         "keyword `flag` passed to this. For all operations excepting "
+         "`:get-lock` returns true on success or throws an error on failure. "
+         "For operation `:get-lock` returns the pid of the process holding "
+         "the lock on success and throws an error on failure.") {
     janet_fixarity(argc, 2);
 
     if(janet_checktype(argv[0], JANET_ABSTRACT)) {
@@ -682,8 +730,15 @@ int sys_name_opt(int32_t argc, Janet *argv, int *id, char *name) {
     return ret;
 }
 
-JANET_FN(cfun_getpwnam, SYS_FUSAGE0("getpwnam"),
-         "DOCUMENT ME") {
+/* TODO: maybe a nicer doc string? */
+JANET_FN(cfun_getpwnam, SYS_FUSAGE0("getpwnam id-or-username"),
+         "-> _:struct user-details|throws error\n\n"
+         "\t`id-or-username` **:number|:string**\n\n"
+         "\t**user-details** {:user-name `:string` :password `:string` "
+         ":user-id `:number` :group-id `:number` :home-directory `:string` "
+         ":shell `:string` :gecos `:string`}\n\n"
+         "Gets the details on a username specified by id or by username with "
+         "`id-or-username`.") {
     janet_fixarity(argc, 1);
 
     struct passwd *ent;
@@ -740,8 +795,13 @@ JANET_FN(cfun_getpwnam, SYS_FUSAGE0("getpwnam"),
 }
 
 /* *nix: grp.h, *: ? */
-JANET_FN(cfun_getgrnam, SYS_FUSAGE0("getgrnam"),
-         "DOCUMENT ME") {
+JANET_FN(cfun_getgrnam, SYS_FUSAGE("getgrnam", " id-or-groupname"),
+         "-> _:struct group-details|thows error_\n\n"
+         "\t`id-or-groupname` **:number|:string**\n\n"
+         "\t**user-details** {:group-name `:string` :password `:string` "
+         ":group-id `:number`}\n\n"
+         "Gets the details on a group specified by id or by group name with "
+         "`id-or-username`") {
     janet_fixarity(argc, 1);
 
     struct group *ent;

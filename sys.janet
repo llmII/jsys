@@ -1,5 +1,8 @@
 (import csys :as sys)
 
+# TODO: re-export os/cwd os/cd as sys/current-working-directory and
+# sys/change-directory?
+
 # helpers ********************************************************************
 # Definition from:
 #   https://github.com/janet-lang/spork/blob/master/spork/path.janet
@@ -66,6 +69,8 @@
            _        'nix)]
   (each binding exports
     (redef- (string "sys/" os "/" binding) (string "_" binding))))
+
+#TODO: also export as publicly $os/$function-name
 
 # chdir - change directory ***************************************************
 (redef-multi _chdir chdir change-directory)
