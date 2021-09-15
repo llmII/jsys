@@ -187,7 +187,7 @@ JANET_CFUN(cfun_getgrnam);
 JANET_FN(cfun_chdir, SYS_FUSAGE("chdir", " path-or-file"),
          "-> _true|throws error_\n\n"
          "\t`path-or-file` **:string|:core/file**\n\n"
-         "Changes the current working directory to `path-or-fd`") {
+         "Changes the current working directory to `path-or-file`.") {
     janet_fixarity(argc, 1);
 
     if(janet_checktype(argv[0], JANET_ABSTRACT)) {
@@ -208,12 +208,13 @@ JANET_FN(cfun_chdir, SYS_FUSAGE("chdir", " path-or-file"),
     return janet_wrap_boolean(1);
 }
 
-JANET_FN(cfun_chown, SYS_FUSAGE("chown", " uid gid path-or-fd"),
+JANET_FN(cfun_chown, SYS_FUSAGE("chown", " uid gid path-or-file"),
          "-> _true|throws error_\n\n"
          "\t`uid`          **:number**\n\n"
          "\t`gid`          **:number**\n\n"
          "\t`path-or-file` **:string|:core/file**\n\n"
-         "Changes the ownership of the file at `path-or-fd` over to "
+         "Changes the ownership of the file at `path-or-file` over to "
+         "the user defined by `uid` and the group defined by `gid`."
 ) {
     janet_fixarity(argc, 3);
 

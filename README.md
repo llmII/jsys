@@ -8,6 +8,11 @@ Where sensible provide a unified interface to facilitate ease of use, but allow 
 direct usage of system level functions for when a user's needs lay outside the bounds
 of predetermination.
 
+#### Installation
+With `jpm` you can now install this with `jpm install https://github.com/llmII/jsys`
+and import the module. Nothing's been tested so though it loads, and shows
+documentation for each export, expect that things may not work as specified!
+
 **NOTE:**
 Nothing has been tested at this time.
 
