@@ -84,6 +84,7 @@
 (redef-multi _dup2 dup2 redirect-file)
 
 # fork - split off into 2 processes ******************************************
+# TODO: may need a different idea on *BSD where kqueue is dead in child forks
 (redef-symbol _fork fork)
 
 # setegid - set effective operating group id *********************************

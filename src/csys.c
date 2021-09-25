@@ -1,5 +1,3 @@
-#include <janet.h>
-
 /* Licensed as per $PROJECT_ROOT/LICENSE */
 
 /* License and copyright for code derived from wahern/lunix
@@ -49,6 +47,7 @@
 /* Windows not currently supported, but equivalents where it makes sense are
  * great in the sys/unified module */
 #ifndef JANET_WINDOWS
+#define _GNU_SOURCE    /* unhide fileno, dup3, chroot, others */
 #include <errno.h>     /* errno */
 #include <unistd.h>    /* chown(2) chroot(2) dup2(2) fork(2)
                         * setegid(2) seteuid(2) setgid(2)
@@ -58,6 +57,8 @@
 #include <grp.h>       /* struct group - getgrnam(3) */
 #include <stdio.h>     /* fileno(3) */
 #endif
+
+#include <janet.h>
 
 /*============================================================================
  * Macros
