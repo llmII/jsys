@@ -58,7 +58,7 @@
 
 # All the system specific functions exported from C
 (def- exports '(chown chroot dup2 fileno fork setegid seteuid setgid setuid
-                      setsid fcntl getpwnam getgrnam))
+                      setsid fcntl getpwnam getgrnam strftime))
 
 # Figuring out which OS and calling the correct function in every wrapper
 # would be super tedious, so create a local definition prefixed with '_'
@@ -116,5 +116,8 @@
 
 # getgrnam - get group by name or id *****************************************
 (redef-multi _getgrnam getgrnam get-group-info)
+
+# strftime - get a formatted time string *************************************
+(redef-multi _strftime strftime date-string)
 
 # TODO: provide easier lockfile interface

@@ -56,6 +56,7 @@
 #include <pwd.h>       /* struct passwd - getpwnam_r(3) */
 #include <grp.h>       /* struct group - getgrnam(3) */
 #include <stdio.h>     /* fileno(3) */
+#include <time.h>      /* strftime(3)  */
 #endif
 
 #include <janet.h>
@@ -174,9 +175,12 @@ JANET_CFUN(cfun_getpwnam);
 /* *nix: grp.h, *: ? */
 JANET_CFUN(cfun_getgrnam);
 
-/* *nix: stdio.h */
+/* *nix: stdio.h *: ? */
 JANET_CFUN(cfun_file_handle);
 int file_to_fd(Janet *, int);
+
+/* *nix: time.h *: ? */
+JANET_CFUN(cfun_strftime);
 
 /*============================================================================
  * Function definitions
@@ -849,7 +853,7 @@ int file_to_fd(Janet *argv, int idx) {
 }
 
 JANET_FN(cfun_fileno, SYS_FUSAGE("fileno", " file"),
-         "-> _:number|throws error\n\n"
+         "-> _:number|throws error_\n\n"
          "\t`file` **:core/file**\n\n"
          "Returns the integer file descriptor from a :core/file.") {
     int ret;
@@ -858,6 +862,57 @@ JANET_FN(cfun_fileno, SYS_FUSAGE("fileno", " file"),
 
     janet_panic("Invalid File Handle");
     return janet_wrap_boolean(0);
+}
+
+static int date_struct_getint(JanetStruct date, char *field) {
+    Janet f = janet_struct_get(date, janet_ckeywordv(field));
+
+    if (janet_checktype(f, JANET_NIL)) return 0;
+
+    return (int)janet_unwrap_number(f);
+}
+
+void date_struct_to_tm(JanetStruct dt, struct tm *date) {
+    date->tm_isdst = janet_unwrap_boolean(
+        janet_struct_get(dt, janet_wrap_keyword("dst")));;
+
+    date->tm_hour = date_struct_getint(dt, "hours");
+    date->tm_min = date_struct_getint(dt, "minutes");
+    date->tm_mon = date_struct_getint(dt, "month");
+    date->tm_mday = date_struct_getint(dt, "month-day") + 1;
+    date->tm_sec = date_struct_getint(dt, "seconds");
+    date->tm_year = date_struct_getint(dt, "year") - 1900;
+}
+
+/* nix: time.h, *: ? */
+JANET_FN(cfun_strftime, SYS_FUSAGE("strftime", "date format"),
+          "-> _:string|throws error_\n\n"
+          "\t`date` **:struct**\n\n"
+          "\t`format` **:string**\n\n"
+          "With a struct compliant to Janet's `(os/date)` return a formatted "
+          "time string.") {
+    janet_fixarity(argc, 2);
+
+    size_t      curr_max = 64, size = 0;
+    JanetBuffer *datestr = janet_buffer(curr_max);
+    JanetString format = janet_getstring(argv, 1);
+    struct tm   date;
+
+    /* extract the date */
+    date_struct_to_tm(janet_getstruct(argv, 0), &date);
+
+    do {
+        janet_buffer_ensure(datestr, curr_max, 1);
+        size = strftime((char *) datestr->data, curr_max - 1,
+                        (const char *) format, &date);
+        curr_max += 64;
+        /* Stop trying at 4kb and error instead! */
+    } while (0 == size && curr_max < 4097);
+
+    if (curr_max > 4096 || size == 0)
+        janet_panic("Failed to turn date into string.");
+
+    return janet_wrap_string(janet_cstring((char *)datestr->data));
 }
 #else /* Windows */
 /* *nix: unistd.h, *: ? */
@@ -882,6 +937,10 @@ DEF_NOT_IMPL(cfun_getgrnam, "sys/windows/getgrnam");
 
 /* *nix: stdio.h, *: ? */
 DEF_NOT_IMPL(cfun_fileno, "sys/windows/fileno");
+
+/* TODO: Definitely implement this! */
+/* *nix: time.h, *: ? */
+DEF_NOT_IMPL(cfun_strftime, "sys/windows/strftime");
 #endif
 
 /*============================================================================
@@ -913,6 +972,9 @@ JANET_MODULE_ENTRY(JanetTable *env) {
 
         /* *nix: stdio.h, *: ? */
         JANET_REG(SYS_IMPL "/fileno", cfun_fileno),
+
+        /* *nix: time.h, *: ? */
+        JANET_REG(SYS_IMPL "/strftime", cfun_strftime),
         JANET_REG_END
     });
 }
