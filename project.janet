@@ -4,7 +4,8 @@
  :license "ISC"
  :url "https://github.com/llmII/jsys"
  :repo "git+https://github.com/llmII/jsys.git"
- :description "System level utilities/functions for Janet.")
+ :description "System level utilities/functions for Janet."
+ :dependencies ["https://github.com/llmII/jumble"])
 
 (declare-source
  :source ["sys.janet"])
