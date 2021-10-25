@@ -3,7 +3,7 @@
 
 # All the system specific functions exported from C
 (def- exports '(chown chroot dup2 fileno fork setegid seteuid setgid setuid
-                      setsid fcntl getpwnam getgrnam strftime))
+                      setsid fcntl getpwnam getgrnam strftime getpid getppid))
 
 # Figuring out which OS and calling the correct function in every wrapper
 # would be super tedious, so create a local definition prefixed with '_'
@@ -65,4 +65,9 @@
 # strftime - get a formatted time string *************************************
 (defaliases _strftime strftime date-string :export true)
 
+# getpid - get current process id ********************************************
+(defaliases _getpid getpid :export true)
+#
+# getppid - get the process id of the parent of the current process **********
+(defaliases _getppid getppid :export true)
 # TODO: provide easier lockfile interface

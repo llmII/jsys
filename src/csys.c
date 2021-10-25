@@ -51,14 +51,17 @@
 #include <errno.h>     /* errno */
 #include <unistd.h>    /* chown(2) chroot(2) dup2(2) fork(2)
                         * setegid(2) seteuid(2) setgid(2)
-                        * setuid(2) setsid(2)  */
+                        * setuid(2) setsid(2) getpid(2) getppid(2) */
 #include <fcntl.h>     /* F_GETLK F_SETLK - fcntl(2) open(2) */
 #include <pwd.h>       /* struct passwd - getpwnam_r(3) */
 #include <grp.h>       /* struct group - getgrnam(3) */
 #include <stdio.h>     /* fileno(3) */
-#include <time.h>      /* strftime(3)  */
+#else
+#include <Windows.h>
+#include <processthreadsapi.h> /* GetCurrentProcessID:getpid(2) */
 #endif
 
+#include <time.h>      /* strftime(3)  */
 #include <janet.h>
 
 /*============================================================================
@@ -165,6 +168,9 @@ JANET_CFUN(cfun_seteuid);
 JANET_CFUN(cfun_setgid);
 JANET_CFUN(cfun_setuid);
 JANET_CFUN(cfun_setsid);
+/* windows: GetCurrentProcessID | processthreadsapi.h/Windows.h? */
+JANET_CFUN(cfun_getpid);
+JANET_CFUN(cfun_getppid);
 
 /* *nix: fcntl.h, *: ? */
 JANET_CFUN(cfun_fcntl);
@@ -488,6 +494,18 @@ JANET_FN(cfun_setsid, SYS_FUSAGE0("setsid"),
     }
 
     return janet_wrap_integer(pid);
+}
+
+JANET_FN(cfun_getpid, SYS_FUSAGE0("getpid"),
+         "-> _:number pid_\n\n"
+         "Returns the PID of the current process.") {
+    return janet_wrap_integer(getpid());
+}
+
+JANET_FN(cfun_getppid, SYS_FUSAGE0("getppid"),
+         "-> _:number pid_\n\n"
+         "Returns the PID of the parent of the current process.") {
+    return janet_wrap_integer(getppid());
 }
 
 /* *nix: fcntl.h, *: ? */
@@ -884,7 +902,42 @@ void date_struct_to_tm(JanetStruct dt, struct tm *date) {
     date->tm_year = date_struct_getint(dt, "year") - 1900;
 }
 
-/* nix: time.h, *: ? */
+#else /* Windows */
+/* *nix: unistd.h, *: ? */
+DEF_NOT_IMPL(cfun_chown, "sys/windows/chown");
+DEF_NOT_IMPL(cfun_chroot, "sys/windows/chroot");
+DEF_NOT_IMPL(cfun_dup2, "sys/windows/dup2");
+DEF_NOT_IMPL(cfun_fork, "sys/windows/fork");
+DEF_NOT_IMPL(cfun_setegid, "sys/windows/setegid");
+DEF_NOT_IMPL(cfun_seteuid, "sys/windows/seteuid");
+DEF_NOT_IMPL(cfun_setgid, "sys/windows/setgid");
+DEF_NOT_IMPL(cfun_setuid, "sys/windows/setuid");
+DEF_NOT_IMPL(cfun_setsid, "sys/windows/setsid");
+JANET_FN(cfun_getpid, SYS_FUSAGE0("getpid"),
+         "-> _:number pid_\n\n"
+         "Returns the PID of the current process.") {
+    return janet_wrap_integer(GetCurrentProcessId());
+}
+DEF_NOT_IMPL(cfun_getppid, "sys/windows/getppid");
+
+/* *nix: fcntl.h, *: ? */
+DEF_NOT_IMPL(cfun_fcntl, "sys/windows/fcntl");
+
+/* *nix: pwd.h, *: ? */
+DEF_NOT_IMPL(cfun_getpwnam, "sys/windows/getpwnam");
+
+/* *nix: grp.h, *: ? */
+DEF_NOT_IMPL(cfun_getgrnam, "sys/windows/getgrnam");
+
+/* *nix: stdio.h, *: ? */
+DEF_NOT_IMPL(cfun_fileno, "sys/windows/fileno");
+
+/* TODO: Definitely implement this! */
+/* *nix: time.h, *: ? */
+DEF_NOT_IMPL(cfun_strftime, "sys/windows/strftime");
+#endif
+
+/* *: time.h */
 JANET_FN(cfun_strftime, SYS_FUSAGE("strftime", "date format"),
           "-> _:string|throws error_\n\n"
           "\t`date` **:struct**\n\n"
@@ -914,34 +967,6 @@ JANET_FN(cfun_strftime, SYS_FUSAGE("strftime", "date format"),
 
     return janet_wrap_string(janet_cstring((char *)datestr->data));
 }
-#else /* Windows */
-/* *nix: unistd.h, *: ? */
-DEF_NOT_IMPL(cfun_chown, "sys/windows/chown");
-DEF_NOT_IMPL(cfun_chroot, "sys/windows/chroot");
-DEF_NOT_IMPL(cfun_dup2, "sys/windows/dup2");
-DEF_NOT_IMPL(cfun_fork, "sys/windows/fork");
-DEF_NOT_IMPL(cfun_setegid, "sys/windows/setegid");
-DEF_NOT_IMPL(cfun_seteuid, "sys/windows/seteuid");
-DEF_NOT_IMPL(cfun_setgid, "sys/windows/setgid");
-DEF_NOT_IMPL(cfun_setuid, "sys/windows/setuid");
-DEF_NOT_IMPL(cfun_setsid, "sys/windows/setsid");
-
-/* *nix: fcntl.h, *: ? */
-DEF_NOT_IMPL(cfun_fcntl, "sys/windows/fcntl");
-
-/* *nix: pwd.h, *: ? */
-DEF_NOT_IMPL(cfun_getpwnam, "sys/windows/getpwnam");
-
-/* *nix: grp.h, *: ? */
-DEF_NOT_IMPL(cfun_getgrnam, "sys/windows/getgrnam");
-
-/* *nix: stdio.h, *: ? */
-DEF_NOT_IMPL(cfun_fileno, "sys/windows/fileno");
-
-/* TODO: Definitely implement this! */
-/* *nix: time.h, *: ? */
-DEF_NOT_IMPL(cfun_strftime, "sys/windows/strftime");
-#endif
 
 /*============================================================================
  * Export functions
@@ -960,6 +985,8 @@ JANET_MODULE_ENTRY(JanetTable *env) {
         JANET_REG(SYS_IMPL "/setgid", cfun_setgid),
         JANET_REG(SYS_IMPL "/setuid", cfun_setuid),
         JANET_REG(SYS_IMPL "/setsid", cfun_setsid),
+        JANET_REG(SYS_IMPL "/getpid", cfun_getpid),
+        JANET_REG(SYS_IMPL "/getppid", cfun_getppid),
 
         /* *nix: fcntl.h, *: ? */
         JANET_REG(SYS_IMPL "/fcntl", cfun_fcntl),
