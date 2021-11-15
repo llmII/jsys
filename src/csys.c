@@ -716,20 +716,8 @@ static int sys_getgrnam(
     return 0;
 }
 
-int sys_name_opt(int32_t argc, Janet *argv, int *id, char *name) {
-    int ret = 0;
-
-    if(janet_checktype(argv[0], JANET_STRING)) {
-        /* converting name to integer if necessary is left to wrapper! */
-        name = (char *)janet_getcstring(argv, 0);
-    } else if (janet_checktype(argv[0], JANET_NUMBER)) {
-        int ret = 1;
-        *id = janet_getinteger(argv, 0);
-    } else {
-        janet_panic("Slot #1 must be a string (username) or integer (uid)");
-    }
-
-    return ret;
+int sys_name_opt(Janet *argv) {
+    return janet_checktype(argv[0], JANET_NUMBER) ? 1 : 0;
 }
 
 /* TODO: maybe a nicer doc string? */
@@ -745,10 +733,9 @@ JANET_FN(cfun_getpwnam, SYS_FUSAGE0("getpwnam id-or-username"),
 
     struct passwd *ent;
     char  *buf = (char *)janet_smalloc(sizeof(char) * 128);
-    int id; char *name;
 
     /* did we get an ID? or a Name? */
-    switch(sys_name_opt(argc, argv, &id, name)) {
+    switch(sys_name_opt(argv)) {
         case 1: /* is int */
             if(0 != sys_getpwuid(janet_getinteger(argv, 0), &ent, buf, 128)) {
                 sys_errnof("No entry for uid: %d", janet_getinteger(argv, 0));
@@ -768,32 +755,31 @@ JANET_FN(cfun_getpwnam, SYS_FUSAGE0("getpwnam id-or-username"),
     /* TODO: support the time_t fields? */
     JanetKV *ret = janet_struct_begin(7);
     janet_struct_put(ret,
-                     janet_wrap_keyword(":user-name"),
+                     janet_ckeywordv("user-name"),
                      janet_wrap_string(janet_cstring(ent->pw_name)));
     janet_struct_put(ret,
-                     janet_wrap_keyword(":password"),
+                     janet_ckeywordv("password"),
                      janet_wrap_string(janet_cstring(ent->pw_passwd)));
     janet_struct_put(ret,
-                     janet_wrap_keyword(":user-id"),
+                     janet_ckeywordv("user-id"),
                      janet_wrap_integer(ent->pw_uid));
     janet_struct_put(ret,
-                     janet_wrap_keyword(":group-id"),
+                     janet_ckeywordv("group-id"),
                      janet_wrap_integer(ent->pw_gid));
     janet_struct_put(ret,
-                     janet_wrap_keyword(":home-directory"),
+                     janet_ckeywordv("home-directory"),
                      janet_wrap_string(janet_cstring(ent->pw_dir)));
     janet_struct_put(ret,
-                     janet_wrap_keyword(":shell"),
+                     janet_ckeywordv("shell"),
                      janet_wrap_string(janet_cstring(ent->pw_shell)));
     janet_struct_put(ret,
-                     janet_wrap_keyword(":gecos"),
+                     janet_ckeywordv("gecos"),
                      janet_wrap_string(janet_cstring(ent->pw_gecos)));
-    const JanetStruct r = janet_struct_end(ret);
 
     /* copy out above! */
     janet_sfree(buf);
 
-    return janet_wrap_struct(r);
+    return janet_wrap_struct(janet_struct_end(ret));
 }
 
 /* *nix: grp.h, *: ? */
@@ -808,10 +794,9 @@ JANET_FN(cfun_getgrnam, SYS_FUSAGE("getgrnam", " id-or-groupname"),
 
     struct group *ent;
     char  *buf = (char *)janet_smalloc(sizeof(char) * 128);
-    int id; char *name;
 
     /* did we get an ID? or a Name? */
-    switch(sys_name_opt(argc, argv, &id, name)) {
+    switch(sys_name_opt(argv)) {
         case 1: /* is int */
             if(0 != sys_getgrid(janet_getinteger(argv, 0), &ent, buf, 128)) {
                 sys_errnof("No entry for uid: %d", janet_getinteger(argv, 0));
@@ -831,13 +816,13 @@ JANET_FN(cfun_getgrnam, SYS_FUSAGE("getgrnam", " id-or-groupname"),
     /* TODO: support the time_t fields? */
     JanetKV *ret = janet_struct_begin(4);
     janet_struct_put(ret,
-                     janet_wrap_keyword(":group-name"),
+                     janet_ckeywordv("group-name"),
                      janet_wrap_string(janet_cstring(ent->gr_name)));
     janet_struct_put(ret,
-                     janet_wrap_keyword(":password"),
+                     janet_ckeywordv("password"),
                      janet_wrap_string(janet_cstring(ent->gr_passwd)));
     janet_struct_put(ret,
-                     janet_wrap_keyword(":group-id"),
+                     janet_ckeywordv("group-id"),
                      janet_wrap_integer(ent->gr_gid));
 
     /* handle members as tuple */
@@ -852,7 +837,7 @@ JANET_FN(cfun_getgrnam, SYS_FUSAGE("getgrnam", " id-or-groupname"),
     }
 
     janet_struct_put(ret,
-                    janet_wrap_keyword(":group-members"),
+                    janet_ckeywordv("group-members"),
                     janet_wrap_tuple(janet_tuple_n(mem, len)));
 
     const JanetStruct r = janet_struct_end(ret);
